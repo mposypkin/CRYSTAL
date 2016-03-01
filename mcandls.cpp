@@ -5,6 +5,7 @@
  * Created on February 22, 2016, 3:17 PM
  */
 
+#include <stdlib.h>
 #include <iostream>
 #include <funccnt.hpp>
 #include <methods/lins/dichotls/dichotls.hpp>
@@ -13,7 +14,6 @@
 #include <ppenergy.hpp>
 #include <atoms.hpp>
 #include <pairpotentials.hpp>
-#include <c++/4.9.2/bits/stl_vector.h>
 #include "energyfunc.hpp"
 
 class GFSStopper : public LOCSEARCH::GFSDesc<double>::Stopper {
@@ -21,7 +21,9 @@ public:
 
     bool stopnow(double xdiff, double fdiff, double gmin, double fval, int n) {
         mCnt++;
-        if (gmin > -1e-4)
+        if (gmin > -1e-5)
+            return true;
+        else if(n > 1000) 
             return true;
         else
             return false;
@@ -70,6 +72,13 @@ public:
     int mCnt = 0;
 };
 
+void getPoint(const snowgoose::Box<double>& box, double* x) {
+    int n = box.mDim;
+    for (int i = 0; i < n; i++) {
+        x[i] = (double) rand() / (double) RAND_MAX;
+    }
+}
+
 void setupLJProblem(COMPI::MPProblem<double>& mpp) {
     lattice::LatticeData * data = new lattice::LatticeData();
 
@@ -112,9 +121,13 @@ void setupLJProblem(COMPI::MPProblem<double>& mpp) {
     mpp.mBox = new snowgoose::Box<double>(n);
     double A = 0;
     double B = 4;
+    
+    double a[] = {0.8, 0, 0.4,  0.8, 0, 0.4,  0.8, 0, 0.4,  0.8, 0, 0.4};
+    double b[] = {1, 0, 4,  1, 4, 4,  1, 4, 4,  1, 4, 4};
+    
     for (int i = 0; i < n; i++) {
-        mpp.mBox->mA[i] = A;
-        mpp.mBox->mB[i] = B;
+        mpp.mBox->mA[i] = a[i];
+        mpp.mBox->mB[i] = b[i];
     }
     double x[] = {1.1, 0, 1.1, 1.1, 0.4, 0.7, 1.5, 0, 0.1, 1.2, 0.4, 0.8};
     std::cout << "f(x) = " << enrg->energy(x) << "\n";
@@ -132,7 +145,7 @@ int main(int argc, char** argv) {
     mpp.mObjectives.pop_back();
     mpp.mObjectives.push_back(obj);
 
-#if 1       
+#if 0       
     DichStopper lstp;
     LOCSEARCH::DichotLS<double> ls(mpp, lstp);
     ls.getOptions().mSInit = .1;
@@ -159,14 +172,18 @@ int main(int argc, char** argv) {
     desc.getOptions().mHInit = .01;
 
     double x[] = {1, 0, 1, 1, 0.5, 1, 1, 0, 1, 1, 0.5, 1};
-    //double x[] = {1.1, 0, 1.1, 1.1, 0.4, 0.7, 1.5, 0, 0.1, 1.2, 0.4, 0.8};
-    std::cout << "f(x) = " << obj->func(x) << "\n";
-    double v;
-    bool rv = desc.search(x, v);
-    std::cout << "In " << stp.mCnt << " iterations found v = " << v << "\n";
-    //std::cout << " at " << snowgoose::VecUtils::vecPrint(n, x) << "\n";
-    std::cout << "Number of objective calls is " << obj->mCounters.mFuncCalls << "\n";
 
+    int niters = 100;
+    for (int i = 0; i < niters; i++) {
+        double v;
+        getPoint(*(mpp.mBox), (double*)x);
+        stp.mCnt = 0;
+        obj->reset();
+        bool rv = desc.search(x, v);
+        std::cout << "In " << stp.mCnt << " iterations found v = " << v << "\n";
+        //std::cout << " at " << snowgoose::VecUtils::vecPrint(n, x) << "\n";
+        std::cout << "Number of objective calls is " << obj->mCounters.mFuncCalls << "\n";
+    }
     return 0;
 }
 
