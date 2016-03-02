@@ -11,10 +11,24 @@
 #include <methods/lins/dichotls/dichotls.hpp>
 #include <methods/lins/quadls/quadls.hpp>
 #include <methods/gfsdesc/gfsdesc.hpp>
+#include <methods/coordesc/coordesc.hpp>
 #include <ppenergy.hpp>
 #include <atoms.hpp>
 #include <pairpotentials.hpp>
 #include "energyfunc.hpp"
+
+
+class CoorStopper : public LOCSEARCH::CoorDesc<double>::Stopper {
+public:
+
+    bool stopnow(double xdiff, double fdiff, double gran, double fval, int n) {
+        mCnt++;
+        //std::cout << "n = " << n << " fval = " << fval << "\n";
+        return false;
+    }
+
+    int mCnt = 0;
+};
 
 class GFSStopper : public LOCSEARCH::GFSDesc<double>::Stopper {
 public:
@@ -168,6 +182,11 @@ int main(int argc, char** argv) {
 #if 0           
     desc.getOptions().mOnlyCoordinateDescent = true;
 #endif
+    
+#if 1
+    CoorStopper cstp;
+    LOCSEARCH::CoorDesc<double> cdesc(mpp, cstp);
+#endif    
 
     desc.getOptions().mHInit = .01;
 
@@ -179,8 +198,8 @@ int main(int argc, char** argv) {
         getPoint(*(mpp.mBox), (double*)x);
         stp.mCnt = 0;
         obj->reset();
-        bool rv = desc.search(x, v);
-        std::cout << "In " << stp.mCnt << " iterations found v = " << v << "\n";
+        bool rv = cdesc.search(x, v);
+        std::cout << "In " << cstp.mCnt << " iterations found v = " << v << "\n";
         //std::cout << " at " << snowgoose::VecUtils::vecPrint(n, x) << "\n";
         std::cout << "Number of objective calls is " << obj->mCounters.mFuncCalls << "\n";
     }
