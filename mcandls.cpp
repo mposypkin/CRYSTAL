@@ -6,17 +6,24 @@
  */
 
 #include <stdlib.h>
+#include <time.h>
 #include <iostream>
+#include <limits>
+
+//#include <common/fileutils.hpp>
 #include <funccnt.hpp>
 #include <methods/lins/dichotls/dichotls.hpp>
 #include <methods/lins/quadls/quadls.hpp>
 #include <methods/gfsdesc/gfsdesc.hpp>
 #include <methods/coordesc/coordesc.hpp>
+#include <methods/hookejeeves/coorhjexplorer.hpp>
+#include <methods/hookejeeves/rndhjexplorer.hpp>
+#include <methods/hookejeeves/hookjeeves.hpp>
 #include <ppenergy.hpp>
 #include <atoms.hpp>
 #include <pairpotentials.hpp>
-#include "energyfunc.hpp"
 
+#include "energyfunc.hpp"
 
 class CoorStopper : public LOCSEARCH::CoorDesc<double>::Stopper {
 public:
@@ -37,7 +44,7 @@ public:
         mCnt++;
         if (gmin > -1e-5)
             return true;
-        else if(n > 1000) 
+        else if (n > 1000)
             return true;
         else
             return false;
@@ -81,6 +88,18 @@ public:
             return true;
         else
             return false;
+    }
+
+    int mCnt = 0;
+};
+
+class HJStopper : public LOCSEARCH::MHookeJeeves<double>::Stopper {
+public:
+
+    bool stopnow(double xdiff, double fdiff, double fval, int n) {
+        //        std::cout << "n = " << n << "fdiff = " << fdiff << "\n";
+        mCnt++;
+        return false;
     }
 
     int mCnt = 0;
@@ -135,10 +154,10 @@ void setupLJProblem(COMPI::MPProblem<double>& mpp) {
     mpp.mBox = new snowgoose::Box<double>(n);
     double A = 0;
     double B = 4;
-    
-    double a[] = {0.8, 0, 0.4,  0.8, 0, 0.4,  0.8, 0, 0.4,  0.8, 0, 0.4};
-    double b[] = {1, 0, 4,  1, 4, 4,  1, 4, 4,  1, 4, 4};
-    
+
+    double a[] = {0.8, 0, 0.4, 0.8, 0, 0.4, 0.8, 0, 0.4, 0.8, 0, 0.4};
+    double b[] = {1, 0, 4, 1, 4, 4, 1, 4, 4, 1, 4, 4};
+
     for (int i = 0; i < n; i++) {
         mpp.mBox->mA[i] = a[i];
         mpp.mBox->mB[i] = b[i];
@@ -147,19 +166,38 @@ void setupLJProblem(COMPI::MPProblem<double>& mpp) {
     std::cout << "f(x) = " << enrg->energy(x) << "\n";
 }
 
-/*
+struct MyLog {
+
+    MyLog() : mItime(time(NULL)) {
+        std::cout << "format:\n";
+        std::cout << "log-value:time(s):objcalls:value\n";
+        std::cout << "log-record:time(s):objcalls:value\n";
+    }
+
+    time_t log(const std::string& pstfx, double v, int fcalls) {
+        time_t t = time(NULL) - mItime;
+        std::cout << "log-" << pstfx << ":";
+        std::cout << t << ":";
+        std::cout << fcalls << ":";
+        std::cout << v << "\n";
+        return t;
+    }
+
+    time_t mItime;
+};
+
+/**
  * 
  */
 int main(int argc, char** argv) {
-    const int n = 100;
-
     COMPI::MPProblem<double> mpp;
     setupLJProblem(mpp);
+    const int n = mpp.mVarTypes.size();
     COMPI::FuncCnt<double> *obj = new COMPI::FuncCnt<double>(*(mpp.mObjectives.at(0)));
     mpp.mObjectives.pop_back();
     mpp.mObjectives.push_back(obj);
 
-#if 0       
+#if 1       
     DichStopper lstp;
     LOCSEARCH::DichotLS<double> ls(mpp, lstp);
     ls.getOptions().mSInit = .1;
@@ -171,38 +209,110 @@ int main(int argc, char** argv) {
 
 #endif    
 
-    GFSStopper stp;
+    GFSStopper gstp;
 
 #if 1      
-    LOCSEARCH::GFSDesc<double> desc(mpp, stp, &ls);
+    LOCSEARCH::GFSDesc<double> gdesc(mpp, gstp, &ls);
 #else
-    LOCSEARCH::GFSDesc<double> desc(mpp, stp);
+    LOCSEARCH::GFSDesc<double> gdesc(mpp, gstp);
 #endif    
+    gdesc.getOptions().mHInit = .01;
 
-#if 0           
-    desc.getOptions().mOnlyCoordinateDescent = true;
-#endif
-    
-#if 1
     CoorStopper cstp;
     LOCSEARCH::CoorDesc<double> cdesc(mpp, cstp);
+
+    HJStopper hjstp;
+#if 1    
+    LOCSEARCH::CoorHJExplorer<double> explr(mpp);
+    explr.getOptions().mHInit = 0.01;
+    explr.getOptions().mHLB = 1e-6;
+    explr.getOptions().mResetEveryTime = true;
+#endif
+#if 0    
+    LOCSEARCH::RndHJExplorer<double> explr(mpp);
+    explr.getOptions().mMaxTries = 512;
+    explr.getOptions().mHInit = 1;
 #endif    
 
-    desc.getOptions().mHInit = .01;
+#if 1
+    LOCSEARCH::MHookeJeeves<double> hjdesc(mpp, hjstp, explr);
+#else    
+    LOCSEARCH::MHookeJeeves<double> hjdesc(mpp, hjstp, explr, &ls);
+#endif    
+    hjdesc.getOptions().mLambda = 1;
 
-    double x[] = {1, 0, 1, 1, 0.5, 1, 1, 0, 1, 1, 0.5, 1};
 
-    int niters = 100;
+#if 1    
+    std::cout << gdesc.about() << "\n";
+#endif    
+
+#if 0    
+    std::cout << cdesc.about() << "\n";
+#endif    
+
+#if 0    
+    std::cout << hjdesc.about() << "\n";
+#endif    
+
+    srand(1);
+    double vbest = std::numeric_limits<double>::max();
+    double x[n], xbest[n];
+    const int niters = 10;
+    MyLog log;
+
+    double avev = 0;
+    double avefc = 0;
+    double avet = 0;
+
     for (int i = 0; i < niters; i++) {
         double v;
-        getPoint(*(mpp.mBox), (double*)x);
-        stp.mCnt = 0;
+        getPoint(*(mpp.mBox), (double*) x);
         obj->reset();
+        int its = 0;
+#if 1       
+        gstp.mCnt = 0;
+        bool rv = gdesc.search(x, v);
+        its = gstp.mCnt;
+#endif        
+
+#if 0        
+        cstp.mCnt = 0;
         bool rv = cdesc.search(x, v);
-        std::cout << "In " << cstp.mCnt << " iterations found v = " << v << "\n";
+        its = cstp.mCnt;
+#endif        
+
+
+
+#if 0        
+        hjstp.mCnt = 0;
+        bool rv = hjdesc.search(x, v);
+        its = hjstp.mCnt;
+#endif        
+
         //std::cout << " at " << snowgoose::VecUtils::vecPrint(n, x) << "\n";
+        std::cout << "In " << its << " iterations found v = " << v << "\n";
         std::cout << "Number of objective calls is " << obj->mCounters.mFuncCalls << "\n";
+        if (v < vbest) {
+            vbest = v;
+            snowgoose::VecUtils::vecCopy(n, x, xbest);
+            log.log("record", v, obj->mCounters.mFuncCalls);
+        }
+        auto getave = [](int in, double ave, double nval) {
+            double rval = ave * (((double) in) / ((double) in + 1)) + nval / ((double) (in + 1));
+            return rval;
+        };
+        time_t t = log.log("value", v, obj->mCounters.mFuncCalls);
+        avev = getave(i, avev, v);
+        avefc = getave(i, avefc, (double)obj->mCounters.mFuncCalls);
+        avet = getave(i, avet, (double) t)                ;
     }
+
+    std::cout << "Record = " << vbest << "\n";
+    std::cout << "Average value = " << avev << "\n";
+    std::cout << "Average objective calls = " << avefc << "\n";
+    std::cout << "Average time = " << avet << "\n";
+
+    std::cout << "x = " << snowgoose::VecUtils::vecPrint(n, xbest);
     return 0;
 }
 
