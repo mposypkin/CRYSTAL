@@ -16,6 +16,7 @@
 #include <methods/lins/quadls/quadls.hpp>
 #include <methods/gfsdesc/gfsdesc.hpp>
 #include <methods/coordesc/coordesc.hpp>
+#include <methods/varcoordesc/varcoordesc.hpp>
 #include <methods/hookejeeves/coorhjexplorer.hpp>
 #include <methods/hookejeeves/rndhjexplorer.hpp>
 #include <methods/hookejeeves/hookjeeves.hpp>
@@ -29,6 +30,18 @@ class CoorStopper : public LOCSEARCH::CoorDesc<double>::Stopper {
 public:
 
     bool stopnow(double xdiff, double fdiff, double gran, double fval, int n) {
+        mCnt++;
+        //std::cout << "n = " << n << " fval = " << fval << "\n";
+        return false;
+    }
+
+    int mCnt = 0;
+};
+
+class VarCoorStopper : public LOCSEARCH::VarCoorDesc<double>::Stopper {
+public:
+
+    bool stopnow(double xdiff, double fdiff, const double* gran, double fval, int n) {
         mCnt++;
         //std::cout << "n = " << n << " fval = " << fval << "\n";
         return false;
@@ -108,11 +121,20 @@ public:
 void getPoint(const snowgoose::Box<double>& box, double* x) {
     int n = box.mDim;
     for (int i = 0; i < n; i++) {
-        x[i] = (double) rand() / (double) RAND_MAX;
+        x[i] = box.mA[i] + (box.mB[i] - box.mA[i]) * (double) rand() / (double) RAND_MAX;
+    }
+}
+
+void setupPoints(const snowgoose::Box<double>& box, int np, int n, double* x) {
+    srand(1);
+    for (int i = 0; i < np; i++) {
+        double* y = x + i * n;
+        getPoint(box, y);
     }
 }
 
 void setupLJProblem(COMPI::MPProblem<double>& mpp) {
+    
     lattice::LatticeData * data = new lattice::LatticeData();
 
     /**
@@ -221,6 +243,12 @@ int main(int argc, char** argv) {
     CoorStopper cstp;
     LOCSEARCH::CoorDesc<double> cdesc(mpp, cstp);
 
+    VarCoorStopper vcstp;
+    LOCSEARCH::VarCoorDesc<double> vcdesc(mpp, vcstp);
+    vcdesc.getOptions().mHInit = 0.5;
+    vcdesc.getOptions().mInc = 3;
+
+
     HJStopper hjstp;
 #if 1    
     LOCSEARCH::CoorHJExplorer<double> explr(mpp);
@@ -242,19 +270,8 @@ int main(int argc, char** argv) {
     hjdesc.getOptions().mLambda = 1;
 
 
-#if 1    
-    std::cout << gdesc.about() << "\n";
-#endif    
 
-#if 0    
-    std::cout << cdesc.about() << "\n";
-#endif    
 
-#if 0    
-    std::cout << hjdesc.about() << "\n";
-#endif    
-
-    srand(1);
     double vbest = std::numeric_limits<double>::max();
     double x[n], xbest[n];
     const int niters = 10;
@@ -264,23 +281,34 @@ int main(int argc, char** argv) {
     double avefc = 0;
     double avet = 0;
 
+    double xx[niters * n];
+    setupPoints(*(mpp.mBox), niters, n, xx);
+
+    time_t tp = 0;
+
     for (int i = 0; i < niters; i++) {
         double v;
-        getPoint(*(mpp.mBox), (double*) x);
+
+        snowgoose::VecUtils::vecCopy(n, xx + n * i, x);
         obj->reset();
         int its = 0;
-#if 1       
+#if 0       
         gstp.mCnt = 0;
         bool rv = gdesc.search(x, v);
         its = gstp.mCnt;
 #endif        
 
-#if 0        
+#if 1       
         cstp.mCnt = 0;
         bool rv = cdesc.search(x, v);
         its = cstp.mCnt;
 #endif        
 
+#if 0
+        vcstp.mCnt = 0;
+        bool rv = vcdesc.search(x, v);
+        its = vcstp.mCnt;
+#endif        
 
 
 #if 0        
@@ -288,6 +316,15 @@ int main(int argc, char** argv) {
         bool rv = hjdesc.search(x, v);
         its = hjstp.mCnt;
 #endif        
+        auto getave = [](int in, double ave, double nval) {
+            double rval = ave * (((double) in) / ((double) in + 1)) + nval / ((double) (in + 1));
+            return rval;
+        };
+        time_t t = log.log("value", v, obj->mCounters.mFuncCalls);
+        avev = getave(i, avev, v);
+        avefc = getave(i, avefc, (double) obj->mCounters.mFuncCalls);
+        avet = getave(i, avet, (double) t - (double) tp);
+        tp = t;
 
         //std::cout << " at " << snowgoose::VecUtils::vecPrint(n, x) << "\n";
         std::cout << "In " << its << " iterations found v = " << v << "\n";
@@ -297,14 +334,6 @@ int main(int argc, char** argv) {
             snowgoose::VecUtils::vecCopy(n, x, xbest);
             log.log("record", v, obj->mCounters.mFuncCalls);
         }
-        auto getave = [](int in, double ave, double nval) {
-            double rval = ave * (((double) in) / ((double) in + 1)) + nval / ((double) (in + 1));
-            return rval;
-        };
-        time_t t = log.log("value", v, obj->mCounters.mFuncCalls);
-        avev = getave(i, avev, v);
-        avefc = getave(i, avefc, (double)obj->mCounters.mFuncCalls);
-        avet = getave(i, avet, (double) t)                ;
     }
 
     std::cout << "Record = " << vbest << "\n";
@@ -313,6 +342,26 @@ int main(int argc, char** argv) {
     std::cout << "Average time = " << avet << "\n";
 
     std::cout << "x = " << snowgoose::VecUtils::vecPrint(n, xbest);
+    
+    std::cout << "Method:\n";
+
+#if 0    
+    std::cout << gdesc.about() << "\n";
+#endif    
+
+#if 1    
+    std::cout << cdesc.about() << "\n";
+#endif    
+
+#if 0    
+    std::cout << vcdesc.about() << "\n";
+#endif    
+
+
+#if 0    
+    std::cout << hjdesc.about() << "\n";
+#endif    
+
     return 0;
 }
 
