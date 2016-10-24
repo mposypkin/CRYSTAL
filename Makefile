@@ -1,5 +1,5 @@
 ROOT=./
-BINS = mcandls.exe 
+BINS = mcandls.exe streched.exe
 TESTS = 
 
 
