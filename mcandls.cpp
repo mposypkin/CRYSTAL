@@ -274,7 +274,7 @@ int main(int argc, char** argv) {
 
     double vbest = std::numeric_limits<double>::max();
     double x[n], xbest[n];
-    const int niters = 10;
+    const int niters = 3;
     MyLog log;
 
     double avev = 0;
@@ -336,12 +336,19 @@ int main(int argc, char** argv) {
         }
     }
 
+    
     std::cout << "Record = " << vbest << "\n";
     std::cout << "Average value = " << avev << "\n";
     std::cout << "Average objective calls = " << avefc << "\n";
     std::cout << "Average time = " << avet << "\n";
 
-    std::cout << "x = " << snowgoose::VecUtils::vecPrint(n, xbest);
+    std::cout << "x = " << snowgoose::VecUtils::vecPrint(n, xbest, 10);
+    std::cout << "Energy = " << obj->func(xbest) << "\n";
+    
+    // TMP
+    
+    const double tmpx[n] = {0.8576121447,0.0000000000,0.9902911868,0.8576121494,3.4660753358,0.9902787022,0.8576121467,2.9708735663,0.9902911845,0.8576121502,0.4952391918,0.9902787065};
+    std::cout << "TMP Energy = " << obj->func(tmpx) << "\n";
     
     std::cout << "Method:\n";
 
