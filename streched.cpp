@@ -12,7 +12,7 @@
 #include <iostream>
 #include <sstream>
 #include <common/vec.hpp>
-#include <methods/coordesc/coordesc.hpp>
+#include <methods/projcoordesc/projcoordesc.hpp>
 #include <ppenergy.hpp>
 #include <atoms.hpp>
 #include <pairpotentials.hpp>
@@ -66,8 +66,9 @@ void setupLJProblem(COMPI::MPProblem<double>& mpp) {
      */
     lattice::LatticeUtils* lut = new lattice::LatticeUtils(*data);
     lattice::PairPotentialEnergy* enrg = new lattice::PairPotentialEnergy(*lut, *pc);
-
+    enrg->setFixedAtoms(true);
     CRYSTAL::EnergyFunc* fe = new CRYSTAL::EnergyFunc(*enrg);
+
     mpp.mObjectives.push_back(fe);
 
     int n = data->mNumLayers * 3;
@@ -79,7 +80,7 @@ void setupLJProblem(COMPI::MPProblem<double>& mpp) {
     double A = 0;
     double B = 4;
 
-    double a[] = {0.8, 0, 0.4, 0.8, 0, 0.4, 0.8, 0, 0.4, 0.8, 0, 0.4};
+    double a[] = {0.4, 0, 0.4, 0.4, 0, 0.4, 0.4, 0, 0.4, 0.4, 0, 0.4};
     double b[] = {1, 0, 4, 1, 4, 4, 1, 4, 4, 1, 4, 4};
 
     for (int i = 0; i < n; i++) {
@@ -87,7 +88,22 @@ void setupLJProblem(COMPI::MPProblem<double>& mpp) {
         mpp.mBox->mB[i] = b[i];
     }
     double x[] = {1.1, 0, 1.1, 1.1, 0.4, 0.7, 1.5, 0, 0.1, 1.2, 0.4, 0.8};
-    std::cout << "f(x) = " << enrg->energy(x) << "\n";
+    //std::cout << "f(x) = " << enrg->energy(x) << "\n";
+}
+
+void stretch(int nh, double* x) {
+    double h = 0;
+    for (int i = 0; i < N; i += 3) {
+        h += x[i];
+    }
+    double a = nh / h;
+    for (int i = 0; i < N; i += 3) {
+        x[i] *= a;
+    }
+    h = 0;
+    for (int i = 0; i < N; i += 3) {
+        h += x[i];
+    }
 }
 
 /*
@@ -100,7 +116,7 @@ int main(int argc, char** argv) {
     COMPI::FuncCnt<double> *obj = new COMPI::FuncCnt<double>(*(mpp.mObjectives.at(0)));
     mpp.mObjectives.pop_back();
     mpp.mObjectives.push_back(obj);
-    
+
     std::cout << "Enter  string\n";
     std::string s;
     std::getline(std::cin, s);
@@ -108,6 +124,28 @@ int main(int argc, char** argv) {
     snowgoose::VecUtils::vecRead(s, N, x);
     std::cout << snowgoose::VecUtils::vecPrint(N, x) << "\n";
     std::cout << "Energy = " << obj->func(x) << "\n";
+    std::cout << "Energy = " << obj->func(x) << "\n";
+    const snowgoose::Box<double>& box = *(mpp.mBox);
+    int cnt = 0;
+    auto stopper = [&](double xdiff, double fdiff, double gran, double fval, int n) {
+        cnt++;
+        std::cout << "cnt = " << cnt << ", fval =" << fval << "\n";
+        if (cnt > 2000)
+            return true;
+        else
+            return false;
+    };
+    auto projector = [&box] (double* x) {
+        stretch(3, x);
+        snowgoose::BoxUtils::project(x, box);
+    };
+    LOCSEARCH::ProjCoorDesc<double> desc(mpp, stopper, projector);
+    double v;
+    bool rv = desc.search(x, v);
+    std::cout << desc.about() << "\n";
+    std::cout << "In " << cnt << " iterations found v = " << v << "\n";
+    std::cout << " at " << snowgoose::VecUtils::vecPrint(n, x) << "\n";
+
     return 0;
 }
 
