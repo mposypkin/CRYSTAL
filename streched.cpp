@@ -136,7 +136,7 @@ int main(int argc, char** argv) {
             return false;
     };
     auto projector = [&box] (double* x) {
-        stretch(3, x);
+        stretch(2.5, x);
         snowgoose::BoxUtils::project(x, box);
     };
     LOCSEARCH::ProjCoorDesc<double> desc(mpp, stopper, projector);
