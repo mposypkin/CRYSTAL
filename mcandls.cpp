@@ -23,13 +23,15 @@
 #include <ppenergy.hpp>
 #include <atoms.hpp>
 #include <pairpotentials.hpp>
+#include <tsofenergy.hpp>
+#include <carbontersoff.hpp>
 
 #include "energyfunc.hpp"
 
-class CoorStopper : public LOCSEARCH::CoorDesc<double>::Stopper {
+class CoorStopper {
 public:
 
-    bool stopnow(double xdiff, double fdiff, double gran, double fval, int n) {
+    bool operator () (double xdiff, double fdiff, double gran, double fval, int n) {
         mCnt++;
         //std::cout << "n = " << n << " fval = " << fval << "\n";
         return false;
@@ -188,6 +190,58 @@ void setupLJProblem(COMPI::MPProblem<double>& mpp) {
     std::cout << "f(x) = " << enrg->energy(x) << "\n";
 }
 
+void setupTersoffProblem(COMPI::MPProblem<double>& mpp) {
+    
+    lattice::LatticeData data;
+
+    /**
+     * Setup lattice data
+     */
+    data.mNumLayers = 4;
+    data.mLength = 16;
+    data.mRadius = 3;
+    data.mLayersAtoms[0] = lattice::CARBON;
+    data.mLayersAtoms[1] = lattice::CARBON;
+    data.mLayersAtoms[2] = lattice::CARBON;
+    data.mLayersAtoms[3] = lattice::CARBON;
+
+
+    /**
+     * Setup potential
+     */
+    lattice::TersoffParams tparam ;
+    lattice::fillCarbonParametersTersoffOriginal(tparam);
+    lattice::TersoffUtils tutils(tparam);
+    lattice::LatticeUtils lut(data);
+    lattice::TersoffEnergy *enrg = new lattice::TersoffEnergy(lut, tutils);
+
+    /**
+     * Setup objective
+     */
+    CRYSTAL::EnergyFunc* fe = new CRYSTAL::EnergyFunc(*enrg);
+    mpp.mObjectives.push_back(fe);
+
+    int n = data.mNumLayers * 3;
+    for (int i = 0; i < n; i++) {
+        int v = COMPI::MPProblem<double>::VariableTypes::GENERIC;
+        mpp.mVarTypes.push_back(v);
+    }
+    mpp.mBox = new snowgoose::Box<double>(n);
+    double A = 0;
+    double B = 4;
+
+    double a[] = {0.5, 0, 0.4, 0.5, 0, 0.4, 0.5, 0, 0.4, 0.5, 0, 0.4};
+    double b[] = {2, 0, 4, 2, 4, 4, 2, 4, 4, 2, 4, 4};
+
+    for (int i = 0; i < n; i++) {
+        mpp.mBox->mA[i] = a[i];
+        mpp.mBox->mB[i] = b[i];
+    }
+    double x[] = {1.1, 0, 1.1, 1.1, 0.4, 0.7, 1.5, 0, 0.1, 1.2, 0.4, 0.8};
+    std::cout << "f(x) = " << enrg->energy(x) << "\n";
+}
+
+
 struct MyLog {
 
     MyLog() : mItime(time(NULL)) {
@@ -213,7 +267,8 @@ struct MyLog {
  */
 int main(int argc, char** argv) {
     COMPI::MPProblem<double> mpp;
-    setupLJProblem(mpp);
+    // setupLJProblem(mpp);
+    setupTersoffProblem(mpp);
     const int n = mpp.mVarTypes.size();
     COMPI::FuncCnt<double> *obj = new COMPI::FuncCnt<double>(*(mpp.mObjectives.at(0)));
     mpp.mObjectives.pop_back();
@@ -269,12 +324,9 @@ int main(int argc, char** argv) {
 #endif    
     hjdesc.getOptions().mLambda = 1;
 
-
-
-
     double vbest = std::numeric_limits<double>::max();
     double x[n], xbest[n];
-    const int niters = 3;
+    const int niters = 128;
     MyLog log;
 
     double avev = 0;

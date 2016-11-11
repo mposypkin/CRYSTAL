@@ -91,7 +91,7 @@ void setupLJProblem(COMPI::MPProblem<double>& mpp) {
     //std::cout << "f(x) = " << enrg->energy(x) << "\n";
 }
 
-void stretch(int nh, double* x) {
+void stretch(double nh, double* x) {
     double h = 0;
     for (int i = 0; i < N; i += 3) {
         h += x[i];
@@ -104,6 +104,7 @@ void stretch(int nh, double* x) {
     for (int i = 0; i < N; i += 3) {
         h += x[i];
     }
+
 }
 
 /*
@@ -125,26 +126,52 @@ int main(int argc, char** argv) {
     std::cout << snowgoose::VecUtils::vecPrint(N, x) << "\n";
     std::cout << "Energy = " << obj->func(x) << "\n";
     std::cout << "Energy = " << obj->func(x) << "\n";
+
+
+    auto computeHeight = [] (double* x) {
+        double h = 0;
+        for (int i = 0; i < N; i += 3) {
+            h += x[i];
+        }
+        return h;
+    };
+
+
+
     const snowgoose::Box<double>& box = *(mpp.mBox);
     int cnt = 0;
     auto stopper = [&](double xdiff, double fdiff, double gran, double fval, int n) {
         cnt++;
-        std::cout << "cnt = " << cnt << ", fval =" << fval << "\n";
+        //std::cout << "cnt = " << cnt << ", fval =" << fval << "\n";
         if (cnt > 2000)
             return true;
         else
             return false;
     };
-    auto projector = [&box] (double* x) {
-        stretch(2.5, x);
+
+
+    const double newh = 0.9 * computeHeight(x);
+    std::cout << "newh = " << newh << "\n";
+
+    auto projectorOld = [&newh, &box] (double* x) {
+        stretch(newh, x);
         snowgoose::BoxUtils::project(x, box);
     };
+
+
+    auto projector = [&box, &projectorOld, &computeHeight] (double* x) {
+        projectorOld(x);
+//        std::cout << "height = " << computeHeight(x) << "\n";
+//        std::cout << " at " << snowgoose::VecUtils::vecPrint(N, x) << "\n";
+    };
+
     LOCSEARCH::ProjCoorDesc<double> desc(mpp, stopper, projector);
     double v;
     bool rv = desc.search(x, v);
     std::cout << desc.about() << "\n";
     std::cout << "In " << cnt << " iterations found v = " << v << "\n";
     std::cout << " at " << snowgoose::VecUtils::vecPrint(n, x) << "\n";
+    std::cout << " with height " << computeHeight(x) << "\n";
 
     return 0;
 }
