@@ -6,13 +6,12 @@
  */
 
 #ifndef ENERGYFUNC_HPP
-#define	ENERGYFUNC_HPP
+#define ENERGYFUNC_HPP
 
 #include <functor.hpp>
 #include <energy.hpp>
 namespace CRYSTAL {
-    
-    
+
     class EnergyFunc : public COMPI::Functor <double> {
     public:
 
@@ -23,13 +22,21 @@ namespace CRYSTAL {
             return mEnergy.energy(x);
         }
 
+        /**
+         * Retrieve energy 
+         * @return reference to energy
+         */
+        lattice::Energy& getEnergy() {
+            return mEnergy;
+        }
+
     private:
 
         lattice::Energy& mEnergy;
     };
-    
-    
+
+
 }
 
-#endif	/* ENERGYFUNC_HPP */
+#endif /* ENERGYFUNC_HPP */
 

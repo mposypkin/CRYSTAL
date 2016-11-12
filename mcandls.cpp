@@ -23,15 +23,14 @@
 #include <ppenergy.hpp>
 #include <atoms.hpp>
 #include <pairpotentials.hpp>
-#include <tsofenergy.hpp>
-#include <carbontersoff.hpp>
 
 #include "energyfunc.hpp"
+#include "potentialsetup.hpp"
 
 class CoorStopper {
 public:
 
-    bool operator () (double xdiff, double fdiff, double gran, double fval, int n) {
+    bool operator()(double xdiff, double fdiff, double gran, double fval, int n) {
         mCnt++;
         //std::cout << "n = " << n << " fval = " << fval << "\n";
         return false;
@@ -135,113 +134,6 @@ void setupPoints(const snowgoose::Box<double>& box, int np, int n, double* x) {
     }
 }
 
-void setupLJProblem(COMPI::MPProblem<double>& mpp) {
-    
-    lattice::LatticeData * data = new lattice::LatticeData();
-
-    /**
-     * Setup lattice data
-     */
-    data->mNumLayers = 4;
-    data->mLength = 16;
-    data->mRadius = 3;
-    data->mLayersAtoms[0] = lattice::CARBON;
-    data->mLayersAtoms[1] = lattice::CARBON;
-    data->mLayersAtoms[2] = lattice::CARBON;
-    data->mLayersAtoms[3] = lattice::CARBON;
-
-
-    /**
-     * Setup potential
-     */
-    double qcut = data->mRadius * data->mRadius;
-    double d = 0.15;
-    double qmin = (data->mRadius - d) * (data->mRadius - d);
-    double qdelta = qcut - qmin;
-    // Lennard Jones
-    lattice::PotentialCutter* pc = new lattice::PotentialCutter(qcut, qdelta, lattice::ljpotent);
-
-    /**
-     * Setup energy
-     */
-    lattice::LatticeUtils* lut = new lattice::LatticeUtils(*data);
-    lattice::PairPotentialEnergy* enrg = new lattice::PairPotentialEnergy(*lut, *pc);
-
-    CRYSTAL::EnergyFunc* fe = new CRYSTAL::EnergyFunc(*enrg);
-    mpp.mObjectives.push_back(fe);
-
-    int n = data->mNumLayers * 3;
-    for (int i = 0; i < n; i++) {
-        int v = COMPI::MPProblem<double>::VariableTypes::GENERIC;
-        mpp.mVarTypes.push_back(v);
-    }
-    mpp.mBox = new snowgoose::Box<double>(n);
-    double A = 0;
-    double B = 4;
-
-    double a[] = {0.8, 0, 0.4, 0.8, 0, 0.4, 0.8, 0, 0.4, 0.8, 0, 0.4};
-    double b[] = {1, 0, 4, 1, 4, 4, 1, 4, 4, 1, 4, 4};
-
-    for (int i = 0; i < n; i++) {
-        mpp.mBox->mA[i] = a[i];
-        mpp.mBox->mB[i] = b[i];
-    }
-    double x[] = {1.1, 0, 1.1, 1.1, 0.4, 0.7, 1.5, 0, 0.1, 1.2, 0.4, 0.8};
-    std::cout << "f(x) = " << enrg->energy(x) << "\n";
-}
-
-void setupTersoffProblem(COMPI::MPProblem<double>& mpp) {
-    
-    lattice::LatticeData data;
-
-    /**
-     * Setup lattice data
-     */
-    data.mNumLayers = 4;
-    data.mLength = 16;
-    data.mRadius = 3;
-    data.mLayersAtoms[0] = lattice::CARBON;
-    data.mLayersAtoms[1] = lattice::CARBON;
-    data.mLayersAtoms[2] = lattice::CARBON;
-    data.mLayersAtoms[3] = lattice::CARBON;
-
-
-    /**
-     * Setup potential
-     */
-    lattice::TersoffParams tparam ;
-    lattice::fillCarbonParametersTersoffOriginal(tparam);
-    lattice::TersoffUtils tutils(tparam);
-    lattice::LatticeUtils lut(data);
-    lattice::TersoffEnergy *enrg = new lattice::TersoffEnergy(lut, tutils);
-
-    /**
-     * Setup objective
-     */
-    CRYSTAL::EnergyFunc* fe = new CRYSTAL::EnergyFunc(*enrg);
-    mpp.mObjectives.push_back(fe);
-
-    int n = data.mNumLayers * 3;
-    for (int i = 0; i < n; i++) {
-        int v = COMPI::MPProblem<double>::VariableTypes::GENERIC;
-        mpp.mVarTypes.push_back(v);
-    }
-    mpp.mBox = new snowgoose::Box<double>(n);
-    double A = 0;
-    double B = 4;
-
-    double a[] = {0.5, 0, 0.4, 0.5, 0, 0.4, 0.5, 0, 0.4, 0.5, 0, 0.4};
-    double b[] = {2, 0, 4, 2, 4, 4, 2, 4, 4, 2, 4, 4};
-
-    for (int i = 0; i < n; i++) {
-        mpp.mBox->mA[i] = a[i];
-        mpp.mBox->mB[i] = b[i];
-    }
-    double x[] = {1.1, 0, 1.1, 1.1, 0.4, 0.7, 1.5, 0, 0.1, 1.2, 0.4, 0.8};
-    std::cout << "f(x) = " << enrg->energy(x) << "\n";
-}
-
-
 struct MyLog {
 
     MyLog() : mItime(time(NULL)) {
@@ -266,9 +158,13 @@ struct MyLog {
  * 
  */
 int main(int argc, char** argv) {
+    if (argc != 3) {
+        std::cout << "usage: " << argv[0] << " " << LENNARD_JONES_POTENTIAL << "|" << TERSOFF_POTENTIAL << " number_of_tries \n";
+        exit(-1);
+    }
     COMPI::MPProblem<double> mpp;
-    // setupLJProblem(mpp);
-    setupTersoffProblem(mpp);
+    PotentialSetup::choosePotential(argv[1], mpp);
+    const int niters = atoi(argv[2]);
     const int n = mpp.mVarTypes.size();
     COMPI::FuncCnt<double> *obj = new COMPI::FuncCnt<double>(*(mpp.mObjectives.at(0)));
     mpp.mObjectives.pop_back();
@@ -326,7 +222,7 @@ int main(int argc, char** argv) {
 
     double vbest = std::numeric_limits<double>::max();
     double x[n], xbest[n];
-    const int niters = 128;
+    
     MyLog log;
 
     double avev = 0;
@@ -388,7 +284,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    
+
     std::cout << "Record = " << vbest << "\n";
     std::cout << "Average value = " << avev << "\n";
     std::cout << "Average objective calls = " << avefc << "\n";
@@ -396,13 +292,10 @@ int main(int argc, char** argv) {
 
     std::cout << "x = " << snowgoose::VecUtils::vecPrint(n, xbest, 10);
     std::cout << "Energy = " << obj->func(xbest) << "\n";
-    
-    // TMP
-    
-    const double tmpx[n] = {0.8576121447,0.0000000000,0.9902911868,0.8576121494,3.4660753358,0.9902787022,0.8576121467,2.9708735663,0.9902911845,0.8576121502,0.4952391918,0.9902787065};
-    std::cout << "TMP Energy = " << obj->func(tmpx) << "\n";
-    
-    std::cout << "Method:\n";
+
+
+
+
 
 #if 0    
     std::cout << gdesc.about() << "\n";
