@@ -73,6 +73,9 @@ int main(int argc, char** argv) {
     mpp.mObjectives.pop_back();
     mpp.mObjectives.push_back(obj);
 
+    std::cout.precision(10);
+    std::cout.setf(std::ios::fixed, std::ios::floatfield);
+
     std::cout << "Enter  string\n";
     std::string s;
     std::getline(std::cin, s);
@@ -80,12 +83,21 @@ int main(int argc, char** argv) {
     snowgoose::VecUtils::vecRead(s, N, x);
     std::cout << snowgoose::VecUtils::vecPrint(N, x) << "\n";
     std::cout << "Energy = " << obj->func(x) << "\n";
+    if (std::string(argv[1]) == TERSOFF_POTENTIAL) {
+        lattice::TersoffEnergy& tsen = (lattice::TersoffEnergy&)ef->getEnergy();
+        for (auto i : tsen.getLBounds()) {
+            std::cout << i << "\n";
+        }
+        for (auto i : tsen.getUBounds()) {
+            std::cout << i << "\n";
+        }
+    }
 
     int cnt = 0;
     auto stopper = [&](double xdiff, double fdiff, double gran, double fval, int n) {
         cnt++;
         //std::cout << "cnt = " << cnt << ", fval =" << fval << "\n";
-        if (cnt > 2000)
+        if (cnt > 7000)
             return true;
         else
             return false;
