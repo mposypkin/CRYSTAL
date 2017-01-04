@@ -154,6 +154,13 @@ struct MyLog {
     time_t mItime;
 };
 
+void setupLatticeData(lattice::LatticeData& data) {
+    data.mNumLayers = 4;
+    data.mLength = 32;
+    data.mRadius = 3;
+    snowgoose::VecUtils::vecSet(data.mNumLayers, lattice::CARBON, data.mLayersAtoms);
+}
+
 /**
  * 
  */
@@ -163,7 +170,9 @@ int main(int argc, char** argv) {
         exit(-1);
     }
     COMPI::MPProblem<double> mpp;
-    PotentialSetup::choosePotential(argv[1], mpp);
+    lattice::LatticeData data;
+    setupLatticeData(data);
+    PotentialSetup::choosePotential(argv[1], data, mpp);
     const int niters = atoi(argv[2]);
     const int n = mpp.mVarTypes.size();
     COMPI::FuncCnt<double> *obj = new COMPI::FuncCnt<double>(*(mpp.mObjectives.at(0)));
@@ -222,7 +231,7 @@ int main(int argc, char** argv) {
 
     double vbest = std::numeric_limits<double>::max();
     double x[n], xbest[n];
-    
+
     MyLog log;
 
     double avev = 0;
