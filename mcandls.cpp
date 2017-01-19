@@ -20,12 +20,7 @@
 #include <methods/hookejeeves/coorhjexplorer.hpp>
 #include <methods/hookejeeves/rndhjexplorer.hpp>
 #include <methods/hookejeeves/hookjeeves.hpp>
-#include <ppenergy.hpp>
-#include <atoms.hpp>
-#include <pairpotentials.hpp>
-
-#include "energyfunc.hpp"
-#include "potentialsetup.hpp"
+#include "crystproblemfact.hpp"
 
 class CoorStopper {
 public:
@@ -154,12 +149,7 @@ struct MyLog {
     time_t mItime;
 };
 
-void setupLatticeData(lattice::LatticeData& data) {
-    data.mNumLayers = 4;
-    data.mLength = 32;
-    data.mRadius = 3;
-    snowgoose::VecUtils::vecSet(data.mNumLayers, lattice::CARBON, data.mLayersAtoms);
-}
+
 
 /**
  * 
@@ -169,10 +159,11 @@ int main(int argc, char** argv) {
         std::cout << "usage: " << argv[0] << " " << LENNARD_JONES_POTENTIAL << "|" << TERSOFF_POTENTIAL << " number_of_tries \n";
         exit(-1);
     }
-    COMPI::MPProblem<double> mpp;
-    lattice::LatticeData data;
-    setupLatticeData(data);
-    PotentialSetup::choosePotential(argv[1], data, mpp);
+    
+      
+    CrystallProblemFactory cpf(argv[1]);
+    COMPI::MPProblem<double>& mpp = *cpf.get();
+    
     const int niters = atoi(argv[2]);
     const int n = mpp.mVarTypes.size();
     COMPI::FuncCnt<double> *obj = new COMPI::FuncCnt<double>(*(mpp.mObjectives.at(0)));

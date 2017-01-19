@@ -17,8 +17,7 @@
 #include <atoms.hpp>
 #include <pairpotentials.hpp>
 #include <funccnt.hpp>
-#include "energyfunc.hpp"
-#include "potentialsetup.hpp"
+#include "crystproblemfact.hpp"
 
 /**
  * For debugging: 
@@ -57,16 +56,17 @@ int main(int argc, char** argv) {
         std::cout << "usage: " << argv[0] << LENNARD_JONES_POTENTIAL << "|" << TERSOFF_POTENTIAL << " stretch_factor \n";
         exit(-1);
     }
-    
-    COMPI::MPProblem<double> mpp;
-    PotentialSetup::choosePotential(argv[1], mpp);
+
+    CrystallProblemFactory cpf(argv[1]);
+    COMPI::MPProblem<double>& mpp = *cpf.get();
+
     const double stretchFactor = atof(argv[2]);
-    
+
     std::cout.precision(10);
     std::cout.setf(std::ios::fixed, std::ios::floatfield);
 
-    
-        const int n = mpp.mVarTypes.size();
+
+    const int n = mpp.mVarTypes.size();
 
     CRYSTAL::EnergyFunc* ef = dynamic_cast<CRYSTAL::EnergyFunc*> (mpp.mObjectives.at(0));
     SG_ASSERT(ef);

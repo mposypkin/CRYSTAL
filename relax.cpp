@@ -17,8 +17,7 @@
 #include <atoms.hpp>
 #include <pairpotentials.hpp>
 #include <funccnt.hpp>
-#include "energyfunc.hpp"
-#include "potentialsetup.hpp"
+#include "crystproblemfact.hpp"
 
 /**
  * For debugging: 
@@ -60,8 +59,8 @@ int main(int argc, char** argv) {
         exit(-1);
     }
 
-    COMPI::MPProblem<double> mpp;
-    PotentialSetup::choosePotential(argv[1], mpp);
+    CrystallProblemFactory cpf(argv[1]);
+    COMPI::MPProblem<double>& mpp = *cpf.get();
 
     const int n = mpp.mVarTypes.size();
 
